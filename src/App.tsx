@@ -10,11 +10,6 @@ const CoordinateSystem = ({ visible = true }: { visible?: boolean }) => {
   if (!visible) return null
   return (
     <group>
-      {/* 地面 */}
-      <mesh position={[4, -0.01, 4]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[20, 20]} />
-        <meshBasicMaterial color="#080e1a" />
-      </mesh>
       <Grid 
         infiniteGrid 
         fadeDistance={30} 
@@ -28,11 +23,11 @@ const CoordinateSystem = ({ visible = true }: { visible?: boolean }) => {
       />
       {/* Z轴 - 蓝色 (垂直轴) */}
       <Line
-        points={[[0, 0, 0], [0, 10, 0]]}
+        points={[[0, 0, 0], [0, 12, 0]]}
         color="#4d4dff"
         lineWidth={2}
       />
-      <Text position={[0, 10.5, 0]} fontSize={0.5} color="#4d4dff">
+      <Text position={[0, 12.5, 0]} fontSize={0.5} color="#4d4dff">
         Z
       </Text>
 
@@ -57,21 +52,21 @@ const CoordinateSystem = ({ visible = true }: { visible?: boolean }) => {
       </Text>
 
       {/* 刻度标注 */}
-      {[0, 1, 2, 4, 6, 8, 10].map((val) => (
+      {[0, 1, 2, 3, 4, 5, 6].map((val) => (
         <group key={val}>
-          <Text position={[-1, val, 0]} fontSize={0.3} color="white" anchorX="right">
-            {val * 500} m
+          <Text position={[-1, val * 2, 0]} fontSize={0.3} color="white" anchorX="right">
+            {val} km
           </Text>
           {/* 辅助水平面网格线 */}
           <Line
-            points={[[0, val, 0], [8, val, 0]]}
+            points={[[0, val * 2, 0], [8, val * 2, 0]]}
             color="white"
             transparent
             opacity={0.1}
             dashed
           />
           <Line
-            points={[[0, val, 0], [0, val, 8]]}
+            points={[[0, val * 2, 0], [0, val * 2, 8]]}
             color="white"
             transparent
             opacity={0.1}
@@ -150,7 +145,7 @@ const SceneContent = ({
   setSelectedLayer: (id: number | null) => void 
 }) => {
   const { camera, controls } = useThree()
-  const images = ['/radar1.png', '/radar2.png', '/radar3.png', '/radar4.png', '/radar5.png']
+  const images = ['/radar1.png', '/radar2.png', '/radar3.png', '/radar4.png', '/radar5.png', '/radar6.png']
   
   const handleLayerClick = (index: number) => {
     if (selectedLayer === index) {
@@ -169,7 +164,7 @@ const SceneContent = ({
   }, [selectedLayer])
 
   const focusCamera = (index: number) => {
-    const targetY = index * 2 + 1 - 5 // 考虑了 group position 的偏移
+    const targetY = index * 2 - 5 // 考虑了 group position 的偏移
     
     if (controls) {
       // 使用 GSAP 平滑移动相机和控制器的目标点
@@ -224,7 +219,7 @@ const SceneContent = ({
           <RadarPlane 
             key={url} 
             url={url} 
-            position={[4, index * 2 + 1, 4]}
+            position={[4, index * 2, 4]}
             isSelected={selectedLayer === index}
             isHidden={selectedLayer !== null && selectedLayer !== index}
             onClick={() => handleLayerClick(index)}
@@ -322,7 +317,7 @@ function App() {
               textShadow: '0 0 10px rgba(0,0,0,0.5)',
               fontFamily: 'sans-serif'
             }}>
-              {selectedLayer !== null ? `层级 ${selectedLayer + 1} 详情` : '三维雷达反射率'}
+              {selectedLayer !== null ? `高度 ${selectedLayer} km 详情` : '三维雷达反射率'}
             </div>
           </Html>
         </Suspense>
