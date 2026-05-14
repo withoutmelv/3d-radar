@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  radar-3d:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: radar-3d-app
+    ports:
+      - "8080:80"
+    restart: always
+    networks:
+      - radar-network
+
+networks:
+  radar-network:
+    driver: bridge
