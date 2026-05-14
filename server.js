@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 80;
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // 处理 SPA 路由，所有请求都返回 index.html
-app.get('*', (req, res) => {
+app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
