@@ -4,6 +4,112 @@ import * as THREE from 'three'
 import { Suspense, useState, useCallback, useRef, useEffect } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 import gsap from 'gsap'
+import * as L from 'leaflet'
+
+const RADAR_IMAGES = ['/radar1.png', '/radar2.png', '/radar3.png', '/radar4.png', '/radar5.png', '/radar6.png']
+const MAP_SURFACE_SIZE_PX = 320
+
+const LeafletMapSurface = ({ overlayUrl }: { overlayUrl: string }) => {
+  const mapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const element = mapRef.current
+    if (!element) return
+
+    const map = L.map(element, {
+      zoomControl: false,
+      attributionControl: false,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      touchZoom: false,
+      fadeAnimation: false,
+    }).setView([23.3790, 113.7633], 8)
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(map)
+
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize()
+    })
+    resizeObserver.observe(element)
+
+    const frameId = requestAnimationFrame(() => {
+      map.invalidateSize()
+    })
+
+    return () => {
+      cancelAnimationFrame(frameId)
+      resizeObserver.disconnect()
+      map.remove()
+    }
+  }, [])
+
+  return (
+    <div
+      style={{
+        width: `${MAP_SURFACE_SIZE_PX}px`,
+        height: `${MAP_SURFACE_SIZE_PX}px`,
+        boxSizing: 'border-box',
+        background: '#0b1424',
+        border: '2px solid #1e2d45',
+        borderRadius: '4px',
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        position: 'relative',
+      }}
+    >
+      <div
+        ref={mapRef}
+        style={{
+          width: '100%',
+          height: '100%',
+          filter: 'grayscale(100%) saturate(0%) contrast(0.9) brightness(0.92)',
+        }}
+      />
+      <img
+        src={overlayUrl}
+        alt=""
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'fill',
+          opacity: 0.7,
+          pointerEvents: 'none',
+          zIndex: 500,
+        }}
+      />
+    </div>
+  )
+}
+
+// 地图地板组件
+const MapFloor = ({ height = 0, overlayUrl }: { height?: number; overlayUrl: string }) => {
+  return (
+    <group rotation={[-Math.PI / 2, 0, 0]} position={[4, height - 0.15, 4]}>
+      {/* 底部衬垫，防止地图加载前的空洞 */}
+      <mesh position={[0, 0, -0.01]}>
+        <planeGeometry args={[8, 8]} />
+        <meshBasicMaterial color="#0b1424" />
+      </mesh>
+
+      <Html
+        transform
+        distanceFactor={10}
+        occlude={false}
+        // 强制设置大小，并开启 portal 确保不被 Canvas 裁剪
+        portal={{ current: document.body }}
+      >
+        <LeafletMapSurface overlayUrl={overlayUrl} />
+      </Html>
+    </group>
+  )
+}
 
 // 坐标轴组件
 const CoordinateSystem = ({ visible = true }: { visible?: boolean }) => {
@@ -98,7 +204,7 @@ const RadarPlane = ({
   // 鼠标悬停状态
   const [hovered, setHover] = useState(false)
   
-  const opacity = isSelected ? 1 : isHidden ? 0.05 : hovered ? 0.9 : 0.7
+  const opacity = isSelected ? 1 : isHidden ? 0.5 : hovered ? 0.9 : 0.7
 
   return (
     <mesh 
@@ -125,6 +231,7 @@ const RadarPlane = ({
         opacity={opacity} 
         side={THREE.DoubleSide}
         depthWrite={false}
+        depthTest={true} // 显式开启深度测试
       />
       {/* 选中高亮边框 */}
       {isSelected && (
@@ -145,7 +252,9 @@ const SceneContent = ({
   setSelectedLayer: (id: number | null) => void 
 }) => {
   const { camera, controls } = useThree()
-  const images = ['/radar1.png', '/radar2.png', '/radar3.png', '/radar4.png', '/radar5.png', '/radar6.png']
+  const images = RADAR_IMAGES
+  const mapHeight = selectedLayer === null ? 0 : selectedLayer * 2
+  const mapOverlayUrl = selectedLayer === null ? images[0] : images[selectedLayer]
   
   const handleLayerClick = (index: number) => {
     if (selectedLayer === index) {
@@ -164,10 +273,9 @@ const SceneContent = ({
   }, [selectedLayer])
 
   const focusCamera = (index: number) => {
-    const targetY = index * 2 - 5 // 考虑了 group position 的偏移
+    const targetY = index * 2 - 5 // 调整后的高度，去掉了 +1
     
     if (controls) {
-      // 使用 GSAP 平滑移动相机和控制器的目标点
       const orbit = controls as any
       
       gsap.to(camera.position, {
@@ -213,13 +321,14 @@ const SceneContent = ({
 
   return (
     <group position={[-4, -5, -4]}>
+      <MapFloor height={mapHeight} overlayUrl={mapOverlayUrl} />
       <CoordinateSystem visible={selectedLayer === null} />
       <group>
         {images.map((url, index) => (
           <RadarPlane 
             key={url} 
             url={url} 
-            position={[4, index * 2, 4]}
+            position={[4, index === 0 ? 0.02 : index * 2, 4]}
             isSelected={selectedLayer === index}
             isHidden={selectedLayer !== null && selectedLayer !== index}
             onClick={() => handleLayerClick(index)}
@@ -227,6 +336,64 @@ const SceneContent = ({
         ))}
       </group>
     </group>
+  )
+}
+
+const LayerControls = ({
+  selectedLayer,
+  setSelectedLayer
+}: {
+  selectedLayer: number | null
+  setSelectedLayer: (id: number | null) => void
+}) => {
+  const buttonStyle = (active: boolean) => ({
+    padding: '8px 16px',
+    background: active ? 'rgba(0, 255, 255, 0.2)' : 'transparent',
+    border: active ? '1px solid #00ffff' : '1px solid rgba(255, 255, 255, 0.1)',
+    color: active ? '#00ffff' : '#ffffff',
+    cursor: 'pointer',
+    borderRadius: '4px',
+    fontSize: '12px',
+    fontFamily: 'sans-serif'
+  })
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: '20px',
+        right: '20px',
+        zIndex: 10,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '8px',
+        background: 'rgba(11, 20, 36, 0.8)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '4px'
+      }}
+    >
+      <span style={{ color: '#ffffff', fontSize: '12px', fontFamily: 'sans-serif' }}>高度层级</span>
+      <button
+        type="button"
+        aria-pressed={selectedLayer === null}
+        onClick={() => setSelectedLayer(null)}
+        style={buttonStyle(selectedLayer === null)}
+      >
+        全览
+      </button>
+      {RADAR_IMAGES.map((_, index) => (
+        <button
+          key={index}
+          type="button"
+          aria-pressed={selectedLayer === index}
+          onClick={() => setSelectedLayer(index)}
+          style={buttonStyle(selectedLayer === index)}
+        >
+          {index} km
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -272,30 +439,7 @@ function App() {
         </div>
       </div>
 
-      {/* 右上角重置按钮 */}
-      {selectedLayer !== null && (
-        <button 
-          onClick={() => {
-            setSelectedLayer(null)
-            // 重置逻辑在 SceneContent 中通过 useEffect 触发或者直接暴露方法
-            // 这里简单点，直接刷新状态，SceneContent 内部会处理重置
-          }}
-          style={{
-            position: 'absolute',
-            top: '20px',
-            right: '20px',
-            zIndex: 10,
-            padding: '8px 16px',
-            background: 'rgba(0, 255, 255, 0.2)',
-            border: '1px solid #00ffff',
-            color: '#00ffff',
-            cursor: 'pointer',
-            borderRadius: '4px'
-          }}
-        >
-          重置视图
-        </button>
-      )}
+      <LayerControls selectedLayer={selectedLayer} setSelectedLayer={setSelectedLayer} />
 
       <Canvas shadows>
         <Suspense fallback={<Html center><div style={{ color: 'white' }}>加载中...</div></Html>}>
